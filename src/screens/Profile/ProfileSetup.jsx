@@ -20,6 +20,7 @@ import { useSignup } from '../../context/SignupContext';
 import supabase from '../../lib/supabaseClient';
 import { FIREBASE_AUTH } from '../../lib/firebaseConfig';
 import RNFS from 'react-native-fs';
+import { decode } from 'base64-arraybuffer'; 
 
 
 
@@ -109,53 +110,64 @@ const ProfileSetup = () => {
   };
 
 
+  const getMimeType = (ext) => {
+  const types = {
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'webp': 'image/webp',
+    'gif': 'image/gif',
+  };
+  return types[ext] || 'application/octet-stream'; // Default for unknown types
+};
+
+
+
   const uploadProfileImage = async (fileUri, userId) => {
     try {
-      console.log('Starting upload for URI:', fileUri);
+      // 1. Get file extension and determine MIME type
+      const fileExt = fileUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mimeType = getMimeType(fileExt);
+      
+      // 2. Create a unique and descriptive file path for storage
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `public/avatars/${userId}/${fileName}`;
 
-      const fileExt = fileUri.split('.').pop().toLowerCase();
-      const fileName = `profile_${userId}_${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      // Read file as base64
+      // 3. Read the file from the local file system as a base64 string
       const base64File = await RNFS.readFile(fileUri, 'base64');
 
-      // Convert base64 → Blob (this is the key change)
-      const byteCharacters = atob(base64File);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], {
-        type: fileExt === 'png' ? 'image/png' : 'image/jpeg',
-      });
+      // 4. Decode the base64 string into an ArrayBuffer
+      // This is the crucial step. The Supabase 'upload' method expects a binary type.
+      const fileBuffer = decode(base64File);
 
-      console.log('Uploading to Supabase...');
-
-      const { data, error } = await supabase.storage
-        .from('image-storage')
-        .upload(filePath, blob, {
-          contentType: fileExt === 'png' ? 'image/png' : 'image/jpeg',
+      // 5. Upload the file to Supabase Storage
+      const { data, error: uploadError } = await supabase.storage
+        .from('image-storage') // Your bucket name
+        .upload(filePath, fileBuffer, {
+          contentType: mimeType,
           upsert: true,
         });
 
-      if (error) {
-        console.error('Supabase upload error:', error);
-        throw error;
+      if (uploadError) {
+        console.error('Supabase upload error:', uploadError.message);
+        throw uploadError;
       }
 
-      console.log('Upload successful, getting public URL...');
-      const { data: url } = supabase.storage
+      // 6. Get the public URL of the uploaded file
+      const { data: urlData } = supabase.storage
         .from('image-storage')
-        .getPublicUrl(filePath);
+        .getPublicUrl(data.path);
+        
+      console.log('Image uploaded successfully:', urlData.publicUrl);
+      return urlData.publicUrl;
 
-      return url.publicUrl;
     } catch (err) {
-      console.error('Upload error details:', err);
+      console.error('Error during image upload process:', err);
       return null;
     }
   };
+
+
 
 
   // const uploadProfileImage = async (fileUri, userId) => {
@@ -219,53 +231,67 @@ const ProfileSetup = () => {
   // };
 
 
-
   const handleButtonPress = async () => {
-  try {
-    const currentUser = FIREBASE_AUTH.currentUser;
-    if (!currentUser) {
-      Alert.alert('Error', 'No authenticated user found. Please sign in again.');
-      return;
-    }
-
-    let imageUrl = null;
-    if (profileImage) {
-      if (!profileImage.startsWith('file://') && !profileImage.startsWith('content://')) {
-        Alert.alert('Error', 'Invalid image format. Please select an image again.');
+    try {
+      const currentUser = FIREBASE_AUTH.currentUser;
+      if (!currentUser) {
+        Alert.alert('Error', 'No authenticated user found. Please sign in again.');
         return;
       }
-      imageUrl = await uploadProfileImage(profileImage, currentUser.uid);
-      if (!imageUrl) {
-        Alert.alert('Error', 'Failed to upload profile image. Please try again.');
-        return;
+
+      // 1. Get the Firebase ID token for the current user.
+      // Your backend requires this in the 'Authorization' header to verify the request.
+      const idToken = await currentUser.getIdToken();
+
+      let imageUrl = null;
+      if (profileImage) {
+        if (!profileImage.startsWith('file://') && !profileImage.startsWith('content://')) {
+          Alert.alert('Error', 'Invalid image format. Please select an image again.');
+          return;
+        }
+        imageUrl = await uploadProfileImage(profileImage, currentUser.uid);
+        if (!imageUrl) {
+          Alert.alert('Error', 'Failed to upload profile image. Please try again.');
+          return;
+        }
       }
+
+      // This data will be sent to your backend.
+      // Note: firebaseUid is removed because the backend now gets it securely from the token.
+      const updatedUser = {
+        ...user,
+        idToken: idToken,
+        picture: imageUrl,
+        name,
+        gender,
+        date_of_birth: dob,
+        referredByCode: referralCode
+      };
+      console.log("updatedUser: ", updatedUser);
+
+      // 2. Make the API call WITH the Authorization header.
+      const response = await axios.post(
+        'http://192.168.29.223:3000/api/auth/signup',
+        updatedUser,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      if (response.data.success) {
+        navigation.navigate('Success');
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to create profile');
+      }
+    } catch (err) {
+      console.error('Signup error:', err);
+      // Give more specific feedback from the backend if available
+      const errorMessage = err.response?.data?.message || 'Failed to create profile';
+      Alert.alert('Error', errorMessage);
     }
-
-    const updatedUser = {
-      firebaseUid: currentUser.uid,
-      picture: imageUrl,
-      name,
-      gender,
-      date_of_birth: dob,
-      referredByCode: referralCode,
-    };
-
-    const response = await axios.post(
-      'http://192.168.29.223:3000/api/auth/signup',
-      updatedUser,
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-
-    if (response.data.success) {
-      navigation.navigate('Success');
-    } else {
-      Alert.alert('Error', response.data.message || 'Failed to create profile');
-    }
-  } catch (err) {
-    console.error('Signup error:', err);
-    Alert.alert('Error', err.response?.data?.message || 'Failed to create profile');
-  }
-};
+  };
 
 
 // Optimized image conversion function
