@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 
-import {SUPABASE_KEY} from '@env';
+import { SUPABASE_API_KEY as SUPABASE_KEY } from '@env';
 
 import { createClient } from '@supabase/supabase-js'
 
