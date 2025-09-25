@@ -245,10 +245,10 @@ const ContactsScreen = () => {
           <TouchableOpacity style={styles.navItem} onPress={()=>navigation.navigate('mainScreen')}>
           <Image source={homeLogo} style={styles.navIcon} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Notifications')}>
+          <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('notifications')}>
           <Image source={bellLogo} style={styles.navIcon} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Contacts')}>
+          <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('contacts')}>
           <Image source={phoneLogo} style={styles.navIcon} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Profile')}>

@@ -72,6 +72,35 @@ const NotificationsScreen = () => {
   ]);
 
 
+  const handleAccepted = async (item)=>{
+    try{
+      console.log("item", item);
+      const currentUser = FIREBASE_AUTH.currentUser;
+      if (!currentUser) {
+        console.error("No current user!");
+        return;
+      }
+      const idToken = await currentUser.getIdToken();
+      const data =  { 
+        senderId : item.userId,
+      }
+      const response =await axios.post('http://192.168.29.223:3000/api/contacts/invite/accepted',data,{
+        headers: {
+          Authorization: `Bearer ${idToken}`
+        }
+      });
+      console.log("handleAceeptResponse", response);
+
+      if (response.data.status === 201){
+        console.log("Invitation accepted");
+      }
+
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+
 
   // Map backend notification to existing demo shape
 
@@ -87,7 +116,7 @@ const NotificationsScreen = () => {
     : fallbackSenderPhoto;
 
   // Debug: Log the avatar URL to check if it's valid
-  console.log("Avatar URL:", avatarUrl);
+  // console.log("Avatar URL:", avatarUrl);
 
   return {
     id: `srv-${String(notif.id)}`,
@@ -96,6 +125,7 @@ const NotificationsScreen = () => {
     time: `${month}.${day}`,
     timeframe: data.timeframe,
     code: data.code,
+    userId: notif.userId,
     message: notif.message,
     status: notif.is_read ? 'read' : 'pending',
     avatarUrl: avatarUrl
@@ -118,11 +148,11 @@ const NotificationsScreen = () => {
       });
       
       // Remove success check since backend doesn't send it
-      console.log("data->", response.data);
+      // console.log("data->", response.data);
       const { notificationData = [], senderName, senderPhoto } = response.data;
       const mapped = notificationData.map(n => {
         const endProduct = transformNotification(n, senderName, senderPhoto);
-        console.log("Transformed notification:", endProduct);
+        // console.log("Transformed notification:", endProduct);
         return endProduct;
       });
       if (mapped.length) {
@@ -170,7 +200,7 @@ const NotificationsScreen = () => {
         </View>
       </View>
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() =>handleAccepted(item)}>
           <Image source={thumbsUpImg} style={styles.actionImg} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn}>
@@ -200,8 +230,8 @@ const NotificationsScreen = () => {
           <Text style={styles.message}>{item.message}</Text>
         </View>
       </View>
-      <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionBtn}>
+      <View style={styles.actionRow}> 
+        <TouchableOpacity style={styles.actionBtn}  onPress={() =>handleAccepted(item)}>
           <Image source={thumbsUpImg} style={styles.actionImg} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn}>
@@ -264,10 +294,10 @@ const NotificationsScreen = () => {
             <TouchableOpacity style={styles.navItem} onPress={()=>navigation.navigate('mainScreen')}>
             <Image source={homeLogo} style={styles.navIcon} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Notifications')}>
+            <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('notifications')}>
             <Image source={bellLogo} style={styles.navIcon} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Contacts')}>
+            <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('contacts')}>
             <Image source={phoneLogo} style={styles.navIcon} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Profile')}>

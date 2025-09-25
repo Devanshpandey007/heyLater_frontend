@@ -1,11 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback} from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
 // import { FlashList } from '@shopify/flash-list';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
+import axios from 'axios';
 
 
 
-const AVATAR_URL = 'https://randomuser.me/api/portraits/men/1.jpg'; // Placeholder avatar
+
+
+
+
+// Remove the let AVATAR_URL = ... line
+
 const USER_AVATARS = [
   'https://randomuser.me/api/portraits/men/2.jpg',
   'https://randomuser.me/api/portraits/women/3.jpg',
@@ -23,11 +30,14 @@ const MainScreen = () => {
   const bellLogo = require('../../assets/images/icons/Bell.png');
   const phoneLogo = require('../../assets/images/icons/Phone.png');
   const homeLogo = require('../../assets/images/icons/Icon.png');
+
+  const [avatarUrl, setAvatarUrl] = useState('https://randomuser.me/api/portraits/men/1.jpg');
   
   // Dummy data for demonstration
+  const [user, setUser] = useState({});
   const [profileData, setProfileData] = useState({
-    name: 'Devansh Pandey',
-    status: 'Available',
+    // name: 'Devansh Pandey',
+    // status: 'Available',
     users: [
       { id: '1', name: 'Alice Johnson', status: 'Available', avatar: USER_AVATARS[0] },
       { id: '2', name: 'Bob Smith', status: 'Not Available', avatar: USER_AVATARS[1] },
@@ -38,6 +48,69 @@ const MainScreen = () => {
       { id: '7', name: 'George Miller', status: 'Not Available', avatar: USER_AVATARS[6] },
     ]
   });
+
+
+
+  const fetchConnectedUsers =  useCallback(async () => {
+    try{
+      const currentUser = FIREBASE_AUTH.currentUser;
+      const idToken = await currentUser.getIdToken();
+      if (!currentUser) {
+        console.log('No user is signed in.');
+        return;
+      }
+
+      const response =  await axios.get('http://192.168.29.223:3000/api/users/connected-users', {
+        headers: {
+          Authorization: `Bearer ${idToken}`
+        }
+      });
+
+      if (response.status === 200) {
+        console.log("Connected Users:", response.data);
+      }
+      else {
+        console.log("Failed to fetch connected users:", response.status);
+      }
+    }catch(err){
+      console.error(err);
+    }
+  });
+
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchConnectedUsers();
+      activeUser();
+    }, [fetchConnectedUsers, activeUser])
+  );
+
+  const activeUser  =  async () => {
+    try {
+      const currentUser = FIREBASE_AUTH.currentUser;
+      const idToken = await currentUser.getIdToken();
+      if (currentUser) {
+        const response =  await axios.get('http://192.168.29.223:3000/api/users/profile', {
+          headers: {
+            Authorization: `Bearer ${idToken}`
+          }
+        });
+        if (response.status === 200) {
+          console.log(response.data);
+          setAvatarUrl(response.data.picture);
+        }
+        console.log('User is signed in:', currentUser.email, currentUser.uid);
+        return currentUser;
+      } else {
+        console.log('No user is signed in.');
+        return null;
+      }
+    }catch (error) {
+      console.log(error);
+      console.error('Error fetching active user:', error);
+    }
+  };
+  
 
   // Render each user item
   const renderUserItem = ({ item }) => (
@@ -71,7 +144,7 @@ const MainScreen = () => {
             <View style={styles.statusDot} />
           </View>
         </View>
-        <Image source={{ uri: AVATAR_URL }} style={styles.profileAvatar} />
+        <Image source={{ uri: avatarUrl }} style={styles.profileAvatar} />
       </View>
       {/* Users List */}
       <View style={styles.listContainer}>
