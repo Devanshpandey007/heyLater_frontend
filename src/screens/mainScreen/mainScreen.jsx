@@ -1,11 +1,10 @@
 import React, { useState, useCallback} from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
 // import { FlashList } from '@shopify/flash-list';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
 import axios from 'axios';
-
-
+import Icon from 'react-native-vector-icons/Ionicons';
 
 
 
@@ -25,6 +24,7 @@ const USER_AVATARS = [
 
 const MainScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
 
   const userLogo = require('../../assets/images/icons/User.png');
   const bellLogo = require('../../assets/images/icons/Bell.png');
@@ -158,7 +158,7 @@ const MainScreen = () => {
         />
       </View>
       {/* Bottom Navigation */}
-      <View style={styles.bottomNavBar}>
+      {/* <View style={styles.bottomNavBar}>
           <TouchableOpacity style={styles.navItem}>
           <Image source={homeLogo} style={styles.navIcon} />
           </TouchableOpacity>
@@ -171,6 +171,36 @@ const MainScreen = () => {
           <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Profile')}>
           <Image source={userLogo} style={styles.navIcon} />
           </TouchableOpacity>
+      </View> */}
+      <View style={styles.navBar}>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('mainScreen')}>
+          <Icon 
+            name="home-outline" 
+            size={28} 
+            color={route.name === 'mainScreen' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('notifications')}>
+          <Icon 
+            name="notifications-outline" 
+            size={28} 
+            color={route.name === 'notifications' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('contacts')}>
+          <Icon 
+            name="call-outline" 
+            size={28} 
+            color={route.name === 'contacts' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('ProfilePage')}>
+          <Icon 
+            name="person-circle" 
+            size={30} 
+            color={route.name === 'ProfilePage' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -299,34 +329,24 @@ const styles = StyleSheet.create({
   badgeTextNotAvailable: {
     color: '#FF3B30',
   },
-  bottomNavBar: {
+  navButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  navBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 55,
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 55,
-    backgroundColor: '#fff',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 8,
+    borderTopColor: '#E0E0E0',
   },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  navIcon: {
-    width: 28,
-    height: 28,
-    resizeMode: 'contain',
-    
-  }
 });
 
 export default MainScreen;

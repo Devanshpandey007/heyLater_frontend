@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, Image } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 
 
@@ -10,6 +11,7 @@ import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
 
 const NotificationsScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const [activeTab, setActiveTab] = useState('all');
 
   const userLogo = require('../../assets/images/icons/User.png');
@@ -290,7 +292,7 @@ const NotificationsScreen = () => {
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
       />
-       <View style={styles.bottomNavBar}>
+       {/* <View style={styles.bottomNavBar}>
             <TouchableOpacity style={styles.navItem} onPress={()=>navigation.navigate('mainScreen')}>
             <Image source={homeLogo} style={styles.navIcon} />
             </TouchableOpacity>
@@ -303,7 +305,37 @@ const NotificationsScreen = () => {
             <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Profile')}>
             <Image source={userLogo} style={styles.navIcon} />
             </TouchableOpacity>
-        </View>
+        </View> */}
+        <View style={styles.navBar}>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('mainScreen')}>
+          <Icon 
+            name="home-outline" 
+            size={28} 
+            color={route.name === 'mainScreen' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('notifications')}>
+          <Icon 
+            name="notifications-outline" 
+            size={28} 
+            color={route.name === 'notifications' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('contacts')}>
+          <Icon 
+            name="call-outline" 
+            size={28} 
+            color={route.name === 'contacts' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('ProfilePage')}>
+          <Icon 
+            name="person-circle" 
+            size={30} 
+            color={route.name === 'ProfilePage' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -345,34 +377,6 @@ const styles = StyleSheet.create({
     marginTop:12,
     marginBottom:10,
     padding: 1,
-  },
-  bottomNavBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 55,
-    backgroundColor: '#fff',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  navIcon: {
-    width: 28,
-    height: 28,
-    resizeMode: 'contain',
-    
   },
   tab: {
     flex: 1,
@@ -494,6 +498,24 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     resizeMode: 'contain',
+  },
+  navButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  navBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 55,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
   },
 });
 

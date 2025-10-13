@@ -20,8 +20,13 @@ import MainScreen from './src/screens/mainScreen/mainScreen';
 import ProfilePage from './src/screens/Profile/profilePage';
 import { onAuthStateChanged } from 'firebase/auth';
 import { FIREBASE_AUTH } from './src/lib/firebaseConfig';
+import ProfileScreen from './src/screens/Profile/UserProfile';
+import SetTimeSlotScreen from './src/screens/Profile/SetTimeslot';
+import { en, registerTranslation } from 'react-native-paper-dates';
+registerTranslation('en', en);
 
 const Stack = createNativeStackNavigator();
+
 
 function App() {
   const [initialRoute, setInitialRoute] = useState(null);
@@ -66,6 +71,8 @@ function App() {
               <Stack.Screen name="notifications" component={NotificationsScreen}/>
               <Stack.Screen name="mainScreen" component={MainScreen}/>
               <Stack.Screen name="Profile" component={ProfilePage}/>
+              <Stack.Screen name="ProfilePage" component={ProfileScreen}/>
+              <Stack.Screen name="SetTime" component={SetTimeSlotScreen}/>
             </Stack.Navigator>
           </NavigationContainer>
         </ThemeProvider>

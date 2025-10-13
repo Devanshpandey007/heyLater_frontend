@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, Text, TouchableOpacity, StyleSheet, TextInput, Image } from 'react-native';
 import { fetchDeviceContacts } from '../../services/contactService';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { FIREBASE_AUTH } from '../../lib/firebaseConfig';
 import { Alert } from 'react-native';
 import { useCallback } from 'react';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 const defaultAvatar = require('../../assets/images/icons/heyLaterLogo.png');
 const userLogo = require('../../assets/images/icons/User.png');
@@ -23,6 +24,7 @@ const ContactsScreen = () => {
   const [search, setSearch] = useState('');
   const [filteredContacts, setFilteredContacts] = useState([]);
   const navigation = useNavigation();
+  const route = useRoute();
   const [contactStatus, setContactStatus] = useState({});
 
 
@@ -241,19 +243,35 @@ const ContactsScreen = () => {
       />
 
       {/* Bottom Nav */}
-      <View style={styles.bottomNavBar}>
-          <TouchableOpacity style={styles.navItem} onPress={()=>navigation.navigate('mainScreen')}>
-          <Image source={homeLogo} style={styles.navIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('notifications')}>
-          <Image source={bellLogo} style={styles.navIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('contacts')}>
-          <Image source={phoneLogo} style={styles.navIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={()=> navigation.navigate('Profile')}>
-          <Image source={userLogo} style={styles.navIcon} />
-          </TouchableOpacity>
+      <View style={styles.navBar}>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('mainScreen')}>
+          <Icon 
+            name="home-outline" 
+            size={28} 
+            color={route.name === 'mainScreen' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('notifications')}>
+          <Icon 
+            name="notifications-outline" 
+            size={28} 
+            color={route.name === 'notifications' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('contacts')}>
+          <Icon 
+            name="call-outline" 
+            size={28} 
+            color={route.name === 'contacts' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('ProfilePage')}>
+          <Icon 
+            name="person-circle" 
+            size={30} 
+            color={route.name === 'ProfilePage' ? '#8A2BE2' : '#4A4A4A'} 
+          />
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -399,33 +417,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  bottomNavBar: {
+  navButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  navBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 55,
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 55,
-    backgroundColor: '#fff',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  navIcon: {
-    width: 28,
-    height: 28,
-    resizeMode: 'contain',
-    
+    borderTopColor: '#E0E0E0',
   },
 });
 
