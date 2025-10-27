@@ -74,6 +74,7 @@ const NotificationsScreen = () => {
   ]);
 
 
+
   const handleAccepted = async (item)=>{
     try{
       console.log("item", item);
@@ -91,17 +92,48 @@ const NotificationsScreen = () => {
           Authorization: `Bearer ${idToken}`
         }
       });
-      console.log("handleAceeptResponse", response);
+      // console.log("handleAceeptResponse", response);
 
       if (response.data.status === 201){
         console.log("Invitation accepted");
-      }
+      };
+
+      const updateChnages =  await axios.patch('http://192.168.29.223:3000/api/notifications/mark-read',{notificationId: item.originalId}, {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`
+        }
+      });
+
+      console.log("updateChanges:", updateChnages.data);
 
     }catch(err){
       console.error(err);
     }
   }
 
+  const handleReject = async (item) =>{
+    try{
+       const currentUser = FIREBASE_AUTH.currentUser;
+      if (!currentUser) {
+        console.error("No current user!");
+        return;
+      }
+      const idToken = await currentUser.getIdToken();
+      const updateChnages =  await axios.patch('http://192.168.29.223:3000/api/notifications/mark-read', {notificationId: item.originalId}, {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`
+        }
+      });
+
+      console.log("updateChanges:", updateChnages.data);
+
+    }catch(err){
+      console.error(err);
+    }
+
+  };
 
 
   // Map backend notification to existing demo shape
@@ -122,6 +154,7 @@ const NotificationsScreen = () => {
 
   return {
     id: `srv-${String(notif.id)}`,
+    originalId: notif.id,
     type: notif.type === 'invite_request' ? 'connection' : 'personal',
     name: data.senderName || fallbackSenderName || 'Unknown',
     time: `${month}.${day}`,
@@ -205,7 +238,7 @@ const NotificationsScreen = () => {
         <TouchableOpacity style={styles.actionBtn} onPress={() =>handleAccepted(item)}>
           <Image source={thumbsUpImg} style={styles.actionImg} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity style={styles.actionBtn} onPress={()=> handleReject(item)}>
           <Image source={thumbsDownImg} style={styles.actionImg} />
         </TouchableOpacity>
       </View>

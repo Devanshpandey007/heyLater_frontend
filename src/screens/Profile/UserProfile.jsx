@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Modal, // Import Modal
+  Modal,
+  Alert, // Import Modal
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useRoute} from '@react-navigation/native';
+import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
 
 // --- IMPROVED Mock Data ---
 const scheduleData = {
@@ -126,15 +128,7 @@ const TimeSlotItem = ({ type, start, end, tags = [] }) => {
 };
 
 
-  const handleLogout = async () => {
-      try {
-        await FIREBASE_AUTH.signOut();
-        Alert.alert('Signed Out Successfully');
-        navigation.navigate('Home');
-      } catch (err) {
-        console.error(err);
-      }
-    };
+
 
 // --- Main Profile Screen Component ---
 const ProfileScreen = () => {
@@ -147,6 +141,16 @@ const ProfileScreen = () => {
   const currentDaySlots = scheduleData[selectedDay] || [];
   const availableSlots = currentDaySlots.filter((slot) => slot.type === 'available');
   const busySlots = currentDaySlots.filter((slot) => slot.type === 'busy');
+
+  const handleLogout = async () => {
+    try {
+      await FIREBASE_AUTH.signOut();
+      Alert.alert('Signed Out Successfully');
+      navigation.navigate('Home');
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -283,14 +287,12 @@ const ProfileScreen = () => {
         >
           <View style={styles.menuContainer}>
             <TouchableOpacity style={styles.menuItem} onPress={() => {
-              // Your logout logic goes here
-              setIsMenuVisible(false); // Close the menu
+              handleLogout();
+              setIsMenuVisible(false); 
               console.log('Logout pressed');
             }}>
               <Icon name="log-out-outline" size={20} color="#4A4A4A" />
-              <TouchableOpacity onPress={()=>handleLogout}>
-                <Text style={styles.menuItemText}>Logout</Text>
-              </TouchableOpacity>
+              <Text style={styles.menuItemText}>Logout</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

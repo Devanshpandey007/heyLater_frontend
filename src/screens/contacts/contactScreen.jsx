@@ -1,14 +1,13 @@
-
-import React, { useState, useEffect } from 'react';
-import { View, FlatList, Text, TouchableOpacity, StyleSheet, TextInput, Image } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, FlatList, Text, TouchableOpacity, StyleSheet, TextInput, Image, Alert } from 'react-native';
 import { fetchDeviceContacts } from '../../services/contactService';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { FIREBASE_AUTH } from '../../lib/firebaseConfig';
-import { Alert } from 'react-native';
-import { useCallback } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
+
+
 
 const defaultAvatar = require('../../assets/images/icons/heyLaterLogo.png');
 const userLogo = require('../../assets/images/icons/User.png');
@@ -17,28 +16,55 @@ const phoneLogo = require('../../assets/images/icons/Phone.png');
 const homeLogo = require('../../assets/images/icons/Icon.png');
 
 
+
+
 const ContactsScreen = () => {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [filteredContacts, setFilteredContacts] = useState([]);
+  const [contactStatus, setContactStatus] = useState({});
   const navigation = useNavigation();
   const route = useRoute();
-  const [contactStatus, setContactStatus] = useState({});
+
+
+  const removeSpacingInContact = (phone) => {
+    return '+' + phone.replace(/\D/g, '');
+  };
+
 
 
   useEffect(() => {
     const loadContacts = async () => {
       try {
         const deviceContacts = await fetchDeviceContacts();
+        const currentUser = FIREBASE_AUTH.currentUser;
+
+        const currentUserPhone = currentUser?.phoneNumber
+          ? removeSpacingInContact(currentUser.phoneNumber)
+          : null;
+
+        const filteredDeviceContacts = deviceContacts.filter((contact) => {
+          if (
+            !contact.phoneNumbers ||
+            contact.phoneNumbers.length === 0 ||
+            !contact.phoneNumbers[0].number
+          )
+            return false;
+
+          const phone = removeSpacingInContact(contact.phoneNumbers[0].number);
+          return phone !== currentUserPhone;
+        });
+
         const statusMap = {};
-        deviceContacts.forEach(contact => {
+        filteredDeviceContacts.forEach((contact) => {
           statusMap[contact.id] = 'invite';
         });
+
         setContactStatus(statusMap);
-        setContacts(deviceContacts);
-        setFilteredContacts(deviceContacts);
+        setContacts(filteredDeviceContacts);
+        setFilteredContacts(filteredDeviceContacts);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -48,7 +74,8 @@ const ContactsScreen = () => {
     loadContacts();
   }, []);
 
-  // Remove the useEffect for fetching statuses and replace with useFocusEffect
+
+
   useFocusEffect(
     useCallback(() => {
       const fetchStatuses = async () => {
@@ -57,22 +84,37 @@ const ContactsScreen = () => {
           const currentUser = FIREBASE_AUTH.currentUser;
           if (!currentUser) return;
           const idToken = await currentUser.getIdToken();
+
           const phoneNumbers = contacts
-            .filter(c => Array.isArray(c.phoneNumbers) && c.phoneNumbers.length > 0 && c.phoneNumbers[0].number)
-            .map(c => removeSpacingInContact(c.phoneNumbers[0].number));
+            .filter(
+              (c) =>
+                Array.isArray(c.phoneNumbers) &&
+                c.phoneNumbers.length > 0 &&
+                c.phoneNumbers[0].number
+            )
+            .map((c) => removeSpacingInContact(c.phoneNumbers[0].number));
+
           if (phoneNumbers.length === 0) return;
+
           const response = await axios.post(
-            "http://192.168.29.223:3000/api/contacts/fetch-status",
+            'http://192.168.29.223:3000/api/contacts/fetch-status',
             { phoneNumbers },
             { headers: { Authorization: `Bearer ${idToken}` } }
           );
+
           if (response.data.success) {
-            // Map status to contact ids
             const statusMap = {};
-            contacts.forEach(contact => {
-              if (Array.isArray(contact.phoneNumbers) && contact.phoneNumbers.length > 0 && contact.phoneNumbers[0].number) {
-                const phone = removeSpacingInContact(contact.phoneNumbers[0].number);
-                statusMap[contact.id] = response.data.statusMap[phone] || 'invite';
+            contacts.forEach((contact) => {
+              if (
+                Array.isArray(contact.phoneNumbers) &&
+                contact.phoneNumbers.length > 0 &&
+                contact.phoneNumbers[0].number
+              ) {
+                const phone = removeSpacingInContact(
+                  contact.phoneNumbers[0].number
+                );
+                statusMap[contact.id] =
+                  response.data.statusMap[phone] || 'invite';
               } else {
                 statusMap[contact.id] = 'invite';
               }
@@ -80,7 +122,7 @@ const ContactsScreen = () => {
             setContactStatus(statusMap);
           }
         } catch (err) {
-          console.error("Error fetching statuses", err);
+          console.error('Error fetching statuses', err);
         }
       };
       fetchStatuses();
@@ -92,37 +134,36 @@ const ContactsScreen = () => {
       setFilteredContacts(contacts);
     } else {
       setFilteredContacts(
-        contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+        contacts.filter((c) =>
+          c.name.toLowerCase().includes(search.toLowerCase())
+        )
       );
     }
   }, [search, contacts]);
 
 
-  const removeSpacingInContact = (phone)=>{
-    return '+' + phone.replace(/\D/g, '');
-  }
+
 
   const handleInvite = async (contact) => {
-    try{
+    try {
       const currentUser = FIREBASE_AUTH.currentUser;
       if (!currentUser) {
         console.log('No authenticated user. Please sign in first.');
         return;
       }
 
-      // const idToken = await currentUser.getIdToken();
-
-      const phone_number = removeSpacingInContact(contact.phoneNumbers[0].number);
+      const phone_number = removeSpacingInContact(
+        contact.phoneNumbers[0].number
+      );
 
       const data = {
         contact_name: contact.name,
-        contact_phone: phone_number
+        contact_phone: phone_number,
       };
-      console.log(data);
-      
+
       const idToken = await currentUser.getIdToken();
       const response = await axios.post(
-        "http://192.168.29.223:3000/api/contacts/invite",
+        'http://192.168.29.223:3000/api/contacts/invite',
         data,
         {
           headers: {
@@ -130,49 +171,62 @@ const ContactsScreen = () => {
           },
         }
       );
-      console.log("response", response.data);
+
       if (!response.data.success) {
-        Alert.alert("Info", data.message || "This person is not on HeyLater yet");
+        Alert.alert('Info', response.data.message || 'User not on HeyLater');
         return;
       }
-      console.log("response:", response.data);
-      setContactStatus(prev => ({ ...prev, [contact.id]: 'pending' }));
-      // setContactStatus(prev => ({ ...prev, [contact.id]: 'pending' }));
-    }catch(err){
-      console.error("full error", err);
-      // console.log({ message: err.response?.data || err.message });
+
+      setContactStatus((prev) => ({ ...prev, [contact.id]: 'pending' }));
+    } catch (err) {
+      console.error('full error', err);
     }
-    // setTimeout(() => {
-    //   setContactStatus(prev => ({ ...prev, [contact.id]: 'disconnect' }));
-    // }, 3000);
   };
 
+
+
   const handleDisconnect = (contactId) => {
-    setContactStatus(prev => ({ ...prev, [contactId]: 'invite' }));
+    setContactStatus((prev) => ({ ...prev, [contactId]: 'invite' }));
   };
+
+
 
   const renderStatusButton = (status, contact) => {
     if (status === 'invite') {
       return (
-        <TouchableOpacity style={[styles.statusButton, styles.inviteButton]} onPress={() => handleInvite(contact)}>
-          <Text style={[styles.statusButtonText, { color: '#6A5ACD' }]}>Invite</Text>
+        <TouchableOpacity
+          style={[styles.statusButton, styles.inviteButton]}
+          onPress={() => handleInvite(contact)}
+        >
+          <Text style={[styles.statusButtonText, { color: '#6A5ACD' }]}>
+            Invite
+          </Text>
         </TouchableOpacity>
       );
     } else if (status === 'pending') {
       return (
         <View style={[styles.statusButton, styles.invitedButton]}>
-          <Text style={[styles.statusButtonText, { color: '#4CAF50' }]}>Invited</Text>
+          <Text style={[styles.statusButtonText, { color: '#4CAF50' }]}>
+            Invited
+          </Text>
         </View>
       );
-    } else if (status === 'disconnect') {
+    } else if (status === 'accepted' || status === 'disconnect') {
       return (
-        <TouchableOpacity style={[styles.statusButton, styles.disconnectButton]} onPress={() => handleDisconnect(contact.id)}>
-          <Text style={[styles.statusButtonText, { color: '#FF3B30' }]}>Disconnect</Text>
+        <TouchableOpacity
+          style={[styles.statusButton, styles.disconnectButton]}
+          onPress={() => handleDisconnect(contact.id)}
+        >
+          <Text style={[styles.statusButtonText, { color: '#FF3B30' }]}>
+            Disconnect
+          </Text>
         </TouchableOpacity>
       );
     }
     return null;
   };
+
+
 
   const renderItem = ({ item }) => (
     <View style={styles.contactItem}>
@@ -180,7 +234,9 @@ const ContactsScreen = () => {
         <Image source={{ uri: item.thumbnailPath }} style={styles.avatar} />
       ) : (
         <View style={styles.avatarInitials}>
-          <Text style={styles.initialsText}>{item.name.charAt(0).toUpperCase()}</Text>
+          <Text style={styles.initialsText}>
+            {item.name.charAt(0).toUpperCase()}
+          </Text>
         </View>
       )}
       <View style={styles.contactInfo}>
@@ -190,6 +246,7 @@ const ContactsScreen = () => {
       {renderStatusButton(contactStatus[item.id], item)}
     </View>
   );
+
 
   if (loading) {
     return (
@@ -207,20 +264,22 @@ const ContactsScreen = () => {
     );
   }
 
+
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Fixed Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>{'< Back'}</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Contacts</Text>
-          {/* <View style={{ width: 32 }} /> */}
         </View>
       </View>
 
-      {/* Floating Search Bar */}
       <View style={styles.searchBarWrapper}>
         <TextInput
           style={styles.searchBar}
@@ -231,45 +290,55 @@ const ContactsScreen = () => {
         />
       </View>
 
-      {/* Contacts List */}
       <FlatList
         data={filteredContacts}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={{
-          paddingTop: 50, // space for header and floating search
+          paddingTop: 50,
           paddingBottom: 80,
         }}
       />
 
-      {/* Bottom Nav */}
       <View style={styles.navBar}>
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('mainScreen')}>
-          <Icon 
-            name="home-outline" 
-            size={28} 
-            color={route.name === 'mainScreen' ? '#8A2BE2' : '#4A4A4A'} 
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => navigation.navigate('mainScreen')}
+        >
+          <Icon
+            name="home-outline"
+            size={28}
+            color={route.name === 'mainScreen' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('notifications')}>
-          <Icon 
-            name="notifications-outline" 
-            size={28} 
-            color={route.name === 'notifications' ? '#8A2BE2' : '#4A4A4A'} 
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => navigation.navigate('notifications')}
+        >
+          <Icon
+            name="notifications-outline"
+            size={28}
+            color={route.name === 'notifications' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('contacts')}>
-          <Icon 
-            name="call-outline" 
-            size={28} 
-            color={route.name === 'contacts' ? '#8A2BE2' : '#4A4A4A'} 
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => navigation.navigate('contacts')}
+        >
+          <Icon
+            name="call-outline"
+            size={28}
+            color={route.name === 'contacts' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('ProfilePage')}>
-          <Icon 
-            name="person-circle" 
-            size={30} 
-            color={route.name === 'ProfilePage' ? '#8A2BE2' : '#4A4A4A'} 
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => navigation.navigate('ProfilePage')}
+        >
+          <Icon
+            name="person-circle"
+            size={30}
+            color={route.name === 'ProfilePage' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
       </View>
@@ -277,18 +346,17 @@ const ContactsScreen = () => {
   );
 };
 
+
+
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   headerContainer: {
     backgroundColor: '#fff',
     zIndex: 1,
-    // paddingBottom: 2,
     marginBottom: 1,
-    borderBottomWidth:1,
-    borderBottomColor: '#eee'
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   headerRow: {
     flexDirection: 'row',
@@ -297,17 +365,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  backButton: {
-    position: 'absolute',
-    left: 8,
-    padding: 0,
-    zIndex: 11,
-  },
- backButtonText: {
-    color: '#6A5ACD',
-    fontSize: 16,
-  },
- screenTitle: {
+  backButton: { position: 'absolute', left: 8, padding: 0, zIndex: 11 },
+  backButtonText: { color: '#6A5ACD', fontSize: 16 },
+  screenTitle: {
     fontSize: 22,
     color: '#6A5ACD',
     fontWeight: 'bold',
@@ -315,7 +375,7 @@ const styles = StyleSheet.create({
   },
   searchBarWrapper: {
     position: 'absolute',
-    top: 52, // directly below header
+    top: 52,
     left: 0,
     right: 0,
     paddingHorizontal: 10,
@@ -357,25 +417,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  initialsText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  contactInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  contactName: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  contactNumber: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: 2,
-  },
+  initialsText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  contactInfo: { flex: 1, justifyContent: 'center' },
+  contactName: { fontSize: 16, color: '#333', fontWeight: '500' },
+  contactNumber: { fontSize: 13, color: '#888', marginTop: 2 },
   statusButton: {
     minWidth: 80,
     paddingVertical: 6,
@@ -385,43 +430,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inviteButton: {
-    borderColor: '#6A5ACD',
-    backgroundColor: '#fff',
-  },
-  invitedButton: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#fff',
-  },
-  disconnectButton: {
-    borderColor: '#FF3B30',
-    backgroundColor: '#fff',
-  },
-  statusButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    color: 'red',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  navButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
+  inviteButton: { borderColor: '#6A5ACD', backgroundColor: '#fff' },
+  invitedButton: { borderColor: '#4CAF50', backgroundColor: '#fff' },
+  disconnectButton: { borderColor: '#FF3B30', backgroundColor: '#fff' },
+  statusButtonText: { fontSize: 15, fontWeight: '500' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  errorText: { color: 'red', fontSize: 16, textAlign: 'center' },
+  navButton: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   navBar: {
     position: 'absolute',
     bottom: 0,
@@ -438,6 +454,3 @@ const styles = StyleSheet.create({
 });
 
 export default ContactsScreen;
-
-
-

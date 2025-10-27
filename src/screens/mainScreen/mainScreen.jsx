@@ -1,16 +1,9 @@
-import React, { useState, useCallback} from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
-// import { FlashList } from '@shopify/flash-list';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
-import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
+import { FIREBASE_AUTH } from '../../lib/firebaseConfig';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/Ionicons';
-
-
-
-
-
-// Remove the let AVATAR_URL = ... line
 
 const USER_AVATARS = [
   'https://randomuser.me/api/portraits/men/2.jpg',
@@ -26,93 +19,74 @@ const MainScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const userLogo = require('../../assets/images/icons/User.png');
-  const bellLogo = require('../../assets/images/icons/Bell.png');
-  const phoneLogo = require('../../assets/images/icons/Phone.png');
-  const homeLogo = require('../../assets/images/icons/Icon.png');
+  const [admin, setAdmin] = useState({});
+  const [connectedUsers, setConnectedUsers] = useState([]);
 
-  const [avatarUrl, setAvatarUrl] = useState('https://randomuser.me/api/portraits/men/1.jpg');
-  
-  // Dummy data for demonstration
-  const [user, setUser] = useState({});
-  const [profileData, setProfileData] = useState({
-    // name: 'Devansh Pandey',
-    // status: 'Available',
-    users: [
-      { id: '1', name: 'Alice Johnson', status: 'Available', avatar: USER_AVATARS[0] },
-      { id: '2', name: 'Bob Smith', status: 'Not Available', avatar: USER_AVATARS[1] },
-      { id: '3', name: 'Charlie Lee', status: 'Available', avatar: USER_AVATARS[2] },
-      { id: '4', name: 'Diana Prince', status: 'Available', avatar: USER_AVATARS[3] },
-      { id: '5', name: 'Ethan Clark', status: 'Not Available', avatar: USER_AVATARS[4] },
-      { id: '6', name: 'Fiona Adams', status: 'Available', avatar: USER_AVATARS[5] },
-      { id: '7', name: 'George Miller', status: 'Not Available', avatar: USER_AVATARS[6] },
-    ]
-  });
-
-
-
-  const fetchConnectedUsers =  useCallback(async () => {
-    try{
+  const fetchConnectedUsers = useCallback(async () => {
+    try {
       const currentUser = FIREBASE_AUTH.currentUser;
-      const idToken = await currentUser.getIdToken();
       if (!currentUser) {
         console.log('No user is signed in.');
         return;
       }
-
-      const response =  await axios.get('http://192.168.29.223:3000/api/users/connected-users', {
+      const idToken = await currentUser.getIdToken();
+      const response = await axios.get('http://192.168.29.223:3000/api/users/connected-users', {
         headers: {
-          Authorization: `Bearer ${idToken}`
-        }
+          Authorization: `Bearer ${idToken}`,
+        },
       });
 
-      if (response.status === 200) {
-        console.log("Connected Users:", response.data);
-      }
-      else {
+      if (response.status === 200 && response.data.data) {
+        const usersList = response.data.data.map(invite => {
+          const otherUser = invite.inviterId === admin.id ? invite.invitee : invite.inviter;
+          return {
+            id: otherUser.id,
+            name: otherUser.name,
+            status: otherUser.is_available ? "Available" : "Not Available",
+            avatar: otherUser.picture || USER_AVATARS[Math.floor(Math.random() * USER_AVATARS.length)],
+          };
+        });
+        setConnectedUsers(usersList);
+        console.log("Connected Users fetched and processed successfully.");
+      } else {
         console.log("Failed to fetch connected users:", response.status);
       }
-    }catch(err){
-      console.error(err);
+    } catch (err) {
+      console.error("Error fetching connected users:", err);
     }
-  });
+  }, []);
 
+  const getAdminProfile = useCallback(async () => {
+    try {
+      const currentUser = FIREBASE_AUTH.currentUser;
+      if (!currentUser) {
+        console.log('No user is signed in.');
+        return null;
+      }
+      const idToken = await currentUser.getIdToken();
+      const response = await axios.get('http://192.168.29.223:3000/api/users/profile', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+      if (response.status === 200) {
+        setAdmin(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching admin profile:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    getAdminProfile();
+  }, [getAdminProfile]);
 
   useFocusEffect(
     useCallback(() => {
       fetchConnectedUsers();
-      activeUser();
-    }, [fetchConnectedUsers, activeUser])
+    }, [fetchConnectedUsers])
   );
 
-  const activeUser  =  async () => {
-    try {
-      const currentUser = FIREBASE_AUTH.currentUser;
-      const idToken = await currentUser.getIdToken();
-      if (currentUser) {
-        const response =  await axios.get('http://192.168.29.223:3000/api/users/profile', {
-          headers: {
-            Authorization: `Bearer ${idToken}`
-          }
-        });
-        if (response.status === 200) {
-          console.log(response.data);
-          setAvatarUrl(response.data.picture);
-        }
-        console.log('User is signed in:', currentUser.email, currentUser.uid);
-        return currentUser;
-      } else {
-        console.log('No user is signed in.');
-        return null;
-      }
-    }catch (error) {
-      console.log(error);
-      console.error('Error fetching active user:', error);
-    }
-  };
-  
-
-  // Render each user item
   const renderUserItem = ({ item }) => (
     <View style={styles.userCard}>
       <View style={styles.userInfo}>
@@ -127,7 +101,7 @@ const MainScreen = () => {
           styles.badgeText,
           item.status === 'Available' ? styles.badgeTextAvailable : styles.badgeTextNotAvailable
         ]}>
-          {item.status}
+          {item.status === 'Available' ? 'Free' : 'Busy'}
         </Text>
       </View>
     </View>
@@ -138,40 +112,29 @@ const MainScreen = () => {
       {/* Header */}
       <View style={styles.headerBox}>
         <View style={styles.headerLeft}>
-          <Text style={styles.profileNameHeader}>Devansh Pandey</Text>
+          <Text style={styles.profileNameHeader}>{admin.name || 'Loading...'}</Text>
           <View style={styles.statusPill}>
-            <Text style={styles.statusPillText}>Status - Available </Text>
-            <View style={styles.statusDot} />
+            <Text style={styles.statusPillText}>Status - {admin.name ? 'Available' : 'Not Available'} </Text>
+            <View style={[styles.statusDot, { backgroundColor: admin.name ? '#34C759' : '#FF3B30' }]} />
           </View>
         </View>
-        <Image source={{ uri: avatarUrl }} style={styles.profileAvatar} />
+        <Image source={{ uri: admin.picture || USER_AVATARS[0] }} style={styles.profileAvatar} />
       </View>
       {/* Users List */}
       <View style={styles.listContainer}>
         <FlatList
-          data={profileData.users}
+          data={connectedUsers}
           renderItem={renderUserItem}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item.id.toString()}
           estimatedItemSize={70}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          ListEmptyComponent={() => (
+            <Text style={styles.emptyListText}>No connected users found.</Text>
+          )}
         />
       </View>
       {/* Bottom Navigation */}
-      {/* <View style={styles.bottomNavBar}>
-          <TouchableOpacity style={styles.navItem}>
-          <Image source={homeLogo} style={styles.navIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('notifications')}>
-          <Image source={bellLogo} style={styles.navIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('contacts')}>
-          <Image source={phoneLogo} style={styles.navIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Profile')}>
-          <Image source={userLogo} style={styles.navIcon} />
-          </TouchableOpacity>
-      </View> */}
       <View style={styles.navBar}>
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('mainScreen')}>
           <Icon 
@@ -228,7 +191,7 @@ const styles = StyleSheet.create({
   profileNameHeader: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#7B61FF', // blue/purple
+    color: '#7B61FF',
     marginBottom: 6,
   },
   statusPill: {
@@ -265,8 +228,8 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
     marginHorizontal: 8,
-    marginTop: 0,
-    marginBottom: 40, // for bottom nav
+    marginTop: 5,
+    marginBottom: 40,
   },
   listContent: {
     paddingBottom: 20,
@@ -276,8 +239,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#fff',
-    paddingVertical:10,
-    paddingHorizontal:12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     marginBottom: 9,
     borderRadius: 10,
     shadowColor: '#000',
@@ -306,7 +269,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     borderWidth: 0.5,
     borderRadius: 16,
-    paddingHorizontal: 14,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     minWidth: 90,
     alignItems: 'center',
