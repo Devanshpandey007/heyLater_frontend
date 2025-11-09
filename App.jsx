@@ -22,6 +22,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { FIREBASE_AUTH } from './src/lib/firebaseConfig';
 import ProfileScreen from './src/screens/Profile/UserProfile';
 import SetTimeSlotScreen from './src/screens/Profile/SetTimeslot';
+import ReadOnlyScreen from './src/screens/Profile/ReadOnlyProfile';
 import { en, registerTranslation } from 'react-native-paper-dates';
 registerTranslation('en', en);
 
@@ -73,6 +74,7 @@ function App() {
               <Stack.Screen name="Profile" component={ProfilePage}/>
               <Stack.Screen name="ProfilePage" component={ProfileScreen}/>
               <Stack.Screen name="SetTime" component={SetTimeSlotScreen}/>
+              <Stack.Screen name="OthersProfile" component={ReadOnlyScreen}/>
             </Stack.Navigator>
           </NavigationContainer>
         </ThemeProvider>

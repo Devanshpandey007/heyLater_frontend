@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -8,40 +8,13 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
-  Alert, // Import Modal
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useNavigation, useRoute} from '@react-navigation/native';
-import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { FIREBASE_AUTH } from '../../lib/firebaseConfig';
+import axios from 'axios';
 
-// --- IMPROVED Mock Data ---
-const scheduleData = {
-  Mon: [
-    { type: 'available', start: '09:00', end: '12:30', tags: ['Morning Focus'] },
-    { type: 'busy', start: '14:00', end: '15:00', tags: ['Client Meeting'] },
-    { type: 'available', start: '15:00', end: '17:00', tags: [] },
-  ],
-  Tue: [
-    { type: 'busy', start: '00:00', end: '23:59', tags: ['Day Off'] },
-  ],
-  Wed: [],
-  Thu: [
-    { type: 'available', start: '00:00', end: '09:00', tags: ['Deep Work'] },
-    { type: 'busy', start: '09:01', end: '12:00', tags: ['Team Sync'] },
-    { type: 'available', start: '12:01', end: '14:00', tags: ['Lunch', 'Break'] },
-    { type: 'busy', start: '14:01', end: '17:30', tags: ['Project X'] },
-  ],
-  Fri: [
-    { type: 'available', start: '00:00', end: '12:00', tags: [] },
-    { type: 'busy', start: '12:00', end: '16:00', tags: ['Gym Session'] },
-    { type: 'available', start: '16:00', end: '23:59', tags: ['Free Evening'] },
-  ],
-  Sat: [],
-  Sun: [],
-};
-
-
-// --- Helper Functions & Components ---
 const timeToMinutes = (time) => {
   const [hours, minutes] = time.split(':').map(Number);
   return hours * 60 + minutes;
@@ -54,6 +27,7 @@ const formatTimeRange = (start, end) => {
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
     hours = hours ? hours : 12;
+    minutes = minutes.toString().padStart(2, '0'); 
     return `${hours}:${minutes} ${ampm}`;
   };
   return `${formatSingleTime(start)} - ${formatSingleTime(end)}`;
@@ -61,13 +35,11 @@ const formatTimeRange = (start, end) => {
 
 const DynamicTimelineBar = ({ slots }) => {
   const totalMinutesInDay = 24 * 60;
-
   if (!slots || slots.length === 0) {
     return <View style={{ flex: 1, backgroundColor: '#A8E6CF' }} />;
   }
 
   const sortedSlots = [...slots].sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
-
   let lastEndTimeMinutes = 0;
   const segments = [];
 
@@ -81,7 +53,7 @@ const DynamicTimelineBar = ({ slots }) => {
         <View key={`gap-${index}`} style={{ flex: gapDuration, backgroundColor: '#A8E6CF' }} />
       );
     }
-    
+
     const duration = endTimeMinutes - startTimeMinutes;
     if (duration > 0) {
       const color = slot.type === 'available' ? '#A8E6CF' : '#FF8A80';
@@ -100,7 +72,7 @@ const DynamicTimelineBar = ({ slots }) => {
     );
   }
 
-  return <>{segments}</>;
+  return <View style={{ flexDirection: 'row', flex: 1 }}>{segments}</View>;
 };
 
 const TimeSlotItem = ({ type, start, end, tags = [] }) => {
@@ -127,18 +99,18 @@ const TimeSlotItem = ({ type, start, end, tags = [] }) => {
   );
 };
 
-
-
-
-// --- Main Profile Screen Component ---
 const ProfileScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const [selectedDay, setSelectedDay] = useState('Thu');
-  const [isMenuVisible, setIsMenuVisible] = useState(false); // State for the menu
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [admin, setAdmin] = useState({});
+  const [userSlots, setUserSlots] = useState({});
 
-  const currentDaySlots = scheduleData[selectedDay] || [];
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const currentDaySlots = userSlots[selectedDay] || [];
+  
+  // ✅ CORRECT FILTERING: Use the 'type' property set during formatting
   const availableSlots = currentDaySlots.filter((slot) => slot.type === 'available');
   const busySlots = currentDaySlots.filter((slot) => slot.type === 'busy');
 
@@ -152,10 +124,89 @@ const ProfileScreen = () => {
     }
   };
 
+
+  const fetchUserDetails = async () => {
+    try {
+      const user = FIREBASE_AUTH.currentUser;
+      if (!user) {
+        console.log('No user signed In');
+        return null;
+      }
+      const idToken = await user.getIdToken();
+      const response = await axios.get('http://192.168.29.223:3000/api/users/profile', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+      if (response.status === 200) setAdmin(response.data);
+    } catch (err) {
+      console.error('Error fetching admin profile:', err);
+    }
+  };
+
+  const fetchUserSlots = async () => {
+    try {
+      console.log('Fetching user slots...');
+      const user = FIREBASE_AUTH.currentUser;
+      if (!user) return;
+      const idToken = await user.getIdToken();
+
+      const response = await axios.get('http://192.168.29.223:3000/api/users/slots', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+
+      if (response.status !== 200) return;
+
+      const slotsFromBackend = response.data.slots || []; 
+      
+      if (slotsFromBackend.length === 0) return;
+      
+      // Determine the day key from the first slot
+      const dayKey = slotsFromBackend[0].day || 'Thu';
+
+      // Helper function to format the time object { hour: 8, minute: 0 } into '8:00'
+      const formatTimePart = (timePart) => {
+          // Pad start time hours if necessary (optional, but robust)
+          const hour = timePart.hour.toString();
+          const minute = timePart.minute.toString().padStart(2, '0');
+          return `${hour}:${minute}`;
+      };
+
+      // 💥 FIX APPLIED HERE
+      const formattedSlotsArray = slotsFromBackend.map((slot) => {
+          return {
+              // 1. Correctly map the backend's 'is_free' property to the local 'type' property
+              type: slot.is_free === 'free' ? 'available' : 'busy',
+              
+              // 2. Correctly format the nested time objects into the 'HH:MM' string format
+              start: formatTimePart(slot.start),
+              end: formatTimePart(slot.end),
+              
+              tags: slot.tags || [],
+          };
+      });
+
+      // 3. Set the state under the correct day key
+      setUserSlots(prevSlots => ({
+          ...prevSlots,
+          [dayKey]: formattedSlotsArray,
+      }));
+
+      console.log('Fetched Slots (Final):', { [dayKey]: formattedSlotsArray });
+    } catch (error) {
+      console.error('Error fetching user slots:', error?.response?.data || error.message);
+    }
+  };
+
+
+  useEffect(() => {
+    fetchUserDetails();
+    fetchUserSlots();
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Hamburger Menu Icon */}
         <TouchableOpacity
           style={styles.menuIconContainer}
           onPress={() => setIsMenuVisible(true)}
@@ -163,43 +214,30 @@ const ProfileScreen = () => {
           <Icon name="menu-outline" size={30} color="#4A4A4A" />
         </TouchableOpacity>
 
-        {/* Profile Section */}
         <View style={styles.profileContainer}>
           <View style={styles.avatarWrapper}>
             <Image
-              source={{ uri: 'https://i.pravatar.cc/150?u=ankitverma' }}
+              source={{ uri: admin?.picture || 'https://i.pravatar.cc/150?u=default' }}
               style={styles.avatar}
             />
           </View>
-          <Text style={styles.profileName}>Ankit Verma</Text>
+          <Text style={styles.profileName}>{admin?.name || 'User'}</Text>
         </View>
 
-        {/* Action Buttons */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.button}>
             <Text style={styles.buttonText}>Edit Profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={()=> navigation.navigate('SetTime')}>
+          <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('SetTime')}>
             <Text style={styles.buttonText}>Set Time Slot</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Schedule Card */}
         <View style={styles.scheduleCard}>
-          {/* Day Selector */}
           <View style={styles.daySelector}>
             {days.map((day) => (
-              <TouchableOpacity
-                key={day}
-                onPress={() => setSelectedDay(day)}
-                style={styles.dayButton}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    selectedDay === day && styles.selectedDayText,
-                  ]}
-                >
+              <TouchableOpacity key={day} onPress={() => setSelectedDay(day)} style={styles.dayButton}>
+                <Text style={[styles.dayText, selectedDay === day && styles.selectedDayText]}>
                   {day}
                 </Text>
                 {selectedDay === day && <View style={styles.dayIndicator} />}
@@ -207,21 +245,16 @@ const ProfileScreen = () => {
             ))}
           </View>
 
-          {/* Dynamic Timeline Bar Graph */}
           <View style={styles.timelineContainer}>
             <DynamicTimelineBar slots={currentDaySlots} />
           </View>
+
           <View style={styles.timeLabels}>
-            <Text style={styles.timeLabelText}>12 am</Text>
-            <Text style={styles.timeLabelText}>4 am</Text>
-            <Text style={styles.timeLabelText}>8 am</Text>
-            <Text style={styles.timeLabelText}>12 pm</Text>
-            <Text style={styles.timeLabelText}>4 pm</Text>
-            <Text style={styles.timeLabelText}>8 pm</Text>
-            <Text style={styles.timeLabelText}>12 am</Text>
+            {['12 am', '4 am', '8 am', '12 pm', '4 pm', '8 pm', '12 am'].map((label, i) => (
+              <Text key={i} style={styles.timeLabelText}>{label}</Text>
+            ))}
           </View>
 
-          {/* Slots List */}
           <View style={styles.slotsListContainer}>
             <Text style={styles.slotTitle}>😊 Available</Text>
             {availableSlots.length > 0 ? (
@@ -240,40 +273,39 @@ const ProfileScreen = () => {
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation Bar */}
-
+      {/* Bottom Nav Bar */}
       <View style={styles.navBar}>
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('mainScreen')}>
-          <Icon 
-            name="home-outline" 
-            size={28} 
-            color={route.name === 'mainScreen' ? '#8A2BE2' : '#4A4A4A'} 
+          <Icon
+            name="home-outline"
+            size={28}
+            color={route.name === 'mainScreen' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('notifications')}>
-          <Icon 
-            name="notifications-outline" 
-            size={28} 
-            color={route.name === 'notifications' ? '#8A2BE2' : '#4A4A4A'} 
+          <Icon
+            name="notifications-outline"
+            size={28}
+            color={route.name === 'notifications' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('contacts')}>
-          <Icon 
-            name="call-outline" 
-            size={28} 
-            color={route.name === 'contacts' ? '#8A2BE2' : '#4A4A4A'} 
+          <Icon
+            name="call-outline"
+            size={28}
+            color={route.name === 'contacts' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('ProfilePage')}>
-          <Icon 
-            name="person-circle" 
-            size={30} 
-            color={route.name === 'ProfilePage' ? '#8A2BE2' : '#4A4A4A'} 
+          <Icon
+            name="person-circle"
+            size={30}
+            color={route.name === 'ProfilePage' ? '#8A2BE2' : '#4A4A4A'}
           />
         </TouchableOpacity>
       </View>
 
-      {/* The Modal for the menu list */}
+      {/* Menu Modal */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -286,11 +318,13 @@ const ProfileScreen = () => {
           onPress={() => setIsMenuVisible(false)}
         >
           <View style={styles.menuContainer}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => {
-              handleLogout();
-              setIsMenuVisible(false); 
-              console.log('Logout pressed');
-            }}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                handleLogout();
+                setIsMenuVisible(false);
+              }}
+            >
               <Icon name="log-out-outline" size={20} color="#4A4A4A" />
               <Text style={styles.menuItemText}>Logout</Text>
             </TouchableOpacity>
@@ -301,205 +335,41 @@ const ProfileScreen = () => {
   );
 };
 
-// --- Styles ---
+// same styles as before
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F8F7FF' },
-  container: {
-    alignItems: 'center',
-    paddingBottom: 100,
-    paddingTop: 0, // Added padding to create space for the menu icon
-  },
-  menuIconContainer: {
-    position: 'absolute',
-    top: 20,
-    left: 15,
-    zIndex: 10,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  menuContainer: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 10,
-    position: 'absolute',
-    top: 60,
-    left: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 1,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-  },
-  menuItemText: {
-    fontSize: 16,
-    marginLeft: 10,
-    color: '#4A4A4A',
-  },
-  profileContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  avatarWrapper: {
-    borderWidth: 3,
-    borderColor: '#8A2BE2',
-    borderRadius: 63,
-    padding: 3,
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  profileName: {
-    marginTop: 10,
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#4A4A4A',
-  },
-  buttonContainer: {
-    width: '85%',
-    marginTop: 20,
-  },
-  button: {
-    backgroundColor: '#8860D0',
-    paddingVertical: 15,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  scheduleCard: {
-    width: '90%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 15,
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  daySelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 15,
-  },
-  dayButton: { alignItems: 'center' },
-  dayText: {
-    fontSize: 16,
-    color: '#9A9A9A',
-  },
-  selectedDayText: {
-    color: '#4A4A4A',
-    fontWeight: 'bold',
-  },
-  dayIndicator: {
-    height: 3,
-    width: 20,
-    backgroundColor: '#8860D0',
-    borderRadius: 2,
-    marginTop: 4,
-  },
-  timelineContainer: {
-    flexDirection: 'row',
-    height: 25,
-    borderRadius: 15,
-    overflow: 'hidden',
-    backgroundColor: '#F0F0F0',
-    marginTop: 5,
-  },
-  timeLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 5,
-    marginTop: 5,
-  },
-  timeLabelText: {
-    fontSize: 10,
-    color: '#9A9A9A',
-  },
-  slotsListContainer: {
-    marginTop: 20,
-  },
-  slotTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4A4A4A',
-    marginBottom: 10,
-  },
-  noSlotsText: {
-    color: '#9A9A9A',
-    textAlign: 'center',
-    padding: 10,
-  },
-  slotItem: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderLeftWidth: 5,
-  },
-  slotColorIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-    marginRight: 10,
-  },
-  slotTimeText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#4A4A4A',
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-    paddingLeft: 22,
-  },
-  tag: {
-    backgroundColor: '#EAE2FF',
-    borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  tagText: {
-    color: '#8860D0',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  navBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 55,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-  },
-  navButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
+  container: { alignItems: 'center', paddingBottom: 100 },
+  menuIconContainer: { position: 'absolute', top: 20, left: 15, zIndex: 10 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' },
+  menuContainer: { backgroundColor: 'white', borderRadius: 10, padding: 10, position: 'absolute', top: 60, left: 15 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
+  menuItemText: { fontSize: 16, marginLeft: 10 },
+  profileContainer: { alignItems: 'center', marginTop: 20 },
+  avatarWrapper: { borderWidth: 3, borderColor: '#8A2BE2', borderRadius: 63, padding: 3 },
+  avatar: { width: 120, height: 120, borderRadius: 60 },
+  profileName: { marginTop: 10, fontSize: 22, fontWeight: '600' },
+  buttonContainer: { width: '85%', marginTop: 20 },
+  button: { backgroundColor: '#8860D0', paddingVertical: 15, borderRadius: 25, alignItems: 'center', marginBottom: 10 },
+  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  scheduleCard: { width: '90%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 15, marginTop: 20 },
+  daySelector: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 15 },
+  dayText: { fontSize: 16, color: '#9A9A9A' },
+  selectedDayText: { color: '#4A4A4A', fontWeight: 'bold' },
+  dayIndicator: { height: 3, width: 20, backgroundColor: '#8860D0', borderRadius: 2, marginTop: 4 },
+  timelineContainer: { flexDirection: 'row', height: 25, borderRadius: 15, overflow: 'hidden', backgroundColor: '#F0F0F0', marginTop: 5 },
+  timeLabels: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 5, marginTop: 5 },
+  timeLabelText: { fontSize: 10, color: '#9A9A9A' },
+  slotsListContainer: { marginTop: 20 },
+  slotTitle: { fontSize: 18, fontWeight: '600', color: '#4A4A4A', marginBottom: 10 },
+  noSlotsText: { color: '#9A9A9A', textAlign: 'center', padding: 10 },
+  slotItem: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: 12, marginBottom: 10, borderLeftWidth: 5 },
+  slotColorIndicator: { width: 12, height: 12, borderRadius: 3, marginRight: 10 },
+  slotTimeText: { fontSize: 16, fontWeight: '500', color: '#4A4A4A' },
+  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, paddingLeft: 22 },
+  tag: { backgroundColor: '#EAE2FF', borderRadius: 12, paddingVertical: 4, paddingHorizontal: 10, marginRight: 6, marginBottom: 6 },
+  tagText: { color: '#8860D0', fontSize: 12, fontWeight: '500' },
+  navBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 55, backgroundColor: '#FFFFFF', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E0E0E0' },
+  navButton: { alignItems: 'center', justifyContent: 'center', flex: 1 },
 });
 
 export default ProfileScreen;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useRoute, useNavigation} from '@react-navigation/native';
+import { FIREBASE_APP, FIREBASE_AUTH } from '../../lib/firebaseConfig';
+import axios from 'axios';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -66,30 +68,118 @@ const Tag = ({ label, isSelected, onPress, theme }) => (
 );
 
 // Updated AddedSlot component with a delete button
-const AddedSlot = ({ slot, theme, onDelete }) => (
-  <View style={[styles.addedSlotCard, { borderColor: theme.border }]}>
-    <View style={styles.addedSlotContent}>
-      <View style={styles.slotIndicatorContainer}>
-        <View style={[styles.slotIndicator, { backgroundColor: theme.primary }]} />
-      </View>
-      <View style={styles.addedSlotDetails}>
-        <Text style={styles.addedSlotTimeText}>
-          {formatTime(slot.start)} - {formatTime(slot.end)}
-        </Text>
-        <View style={styles.addedSlotTagsContainer}>
-          {slot.tags.map(tag => (
-            <View key={tag} style={[styles.addedSlotTag, { backgroundColor: theme.primary }]}>
-              <Text style={[styles.addedSlotTagText, { color: theme.text }]}>{tag}</Text>
-            </View>
-          ))}
+const AddedSlot = ({ slot, theme, onDelete }) => {
+  console.log('Slot:', slot); 
+
+  return (
+    <View style={[styles.addedSlotCard, { borderColor: theme.border }]}>
+      <View style={styles.addedSlotContent}>
+        <View style={styles.slotIndicatorContainer}>
+          <View style={[styles.slotIndicator, { backgroundColor: theme.primary }]} />
+        </View>
+        <View style={styles.addedSlotDetails}>
+          <Text style={styles.addedSlotTimeText}>
+            {formatTime(slot.start)} - {formatTime(slot.end)}
+          </Text>
+          <View style={styles.addedSlotTagsContainer}>
+            {slot.tags.map(tag => (
+              <View key={tag} style={[styles.addedSlotTag, { backgroundColor: theme.primary }]}>
+                <Text style={[styles.addedSlotTagText, { color: theme.text }]}>{tag}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
+      <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
+        <Icon name="trash-outline" size={22} color="#888" />
+      </TouchableOpacity>
     </View>
-    <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
-      <Icon name="trash-outline" size={22} color="#888" />
-    </TouchableOpacity>
-  </View>
-);
+  );
+};
+
+
+
+// const AddedSlot = ({ slot, theme, onDelete }) => {
+//   console.log("sslot:", slot);
+//   const formatSlotTime = (timeString) => {
+//     console.log("timestring: ", timeString);
+//     if (!timeString) return "—";
+//     const date = new Date(timeString);
+//     let hours = date.getHours();
+//     const minutes = date.getMinutes();
+//     const period = hours >= 12 ? 'PM' : 'AM';
+//     hours = hours % 12 || 12;
+//     const minuteStr = minutes < 10 ? `0${minutes}` : minutes;
+//     return `${hours}:${minuteStr} ${period}`;
+//   };
+
+//   return (
+//     <View style={[styles.addedSlotCard, { borderColor: theme.border }]}>
+//       <View style={styles.addedSlotContent}>
+//         <View style={styles.slotIndicatorContainer}>
+//           <View style={[styles.slotIndicator, { backgroundColor: theme.primary }]} />
+//         </View>
+//         <View style={styles.addedSlotDetails}>
+//           <Text style={styles.addedSlotTimeText}>
+//             {formatSlotTime(slot.start_time)} - {formatSlotTime(slot.end_time)}
+//           </Text>
+//           <View style={styles.addedSlotTagsContainer}>
+//             {(slot.tags || []).map(tag => (
+//               <View key={tag} style={[styles.addedSlotTag, { backgroundColor: theme.primary }]}>
+//                 <Text style={[styles.addedSlotTagText, { color: theme.text }]}>{tag}</Text>
+//               </View>
+//             ))}
+//           </View>
+//         </View>
+//       </View>
+//       <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
+//         <Icon name="trash-outline" size={22} color="#888" />
+//       </TouchableOpacity>
+//     </View>
+//   );
+// };
+
+
+const convertToUtcDateTime = (dayName, timeObject) => {
+    
+    const today = new Date();
+  
+    const dayOfWeek = today.getDay(); 
+  
+    const isoDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
+    
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - isoDay);
+    
+    startOfWeek.setHours(0, 0, 0, 0); 
+
+    
+    const dayIndex = DAYS.indexOf(dayName); // DAYS = ['Mon', 'Tue', ...]
+    if (dayIndex === -1) {
+        console.error("Invalid day name provided for conversion.");
+        return null;
+    }
+
+    const targetDate = new Date(startOfWeek);
+    // Add the offset from Monday to get to the selected day (e.g., 5 days for Sat)
+    targetDate.setDate(startOfWeek.getDate() + dayIndex);
+
+    // 3. Convert 12h time to 24h hour
+    let { hour, minute, period } = timeObject;
+    let hour24 = hour;
+
+    if (period === 'PM' && hour !== 12) {
+        hour24 += 12;
+    } else if (period === 'AM' && hour === 12) { // 12 AM (Midnight) is hour 0
+        hour24 = 0;
+    }
+
+    // 4. Apply the time in the local timezone
+    targetDate.setHours(hour24, minute, 0, 0);
+
+    // The Date object is now complete and ready for the database/API call.
+    return targetDate;
+}; 
 
 
 // --- Enhanced Custom Time Picker Component ---
@@ -226,10 +316,19 @@ const SetTimeSlotScreen = () => {
     setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
   };
 
-  const handleAddSlot = () => {
+  const handleAddSlot = async () => {
+
     const existingSlots = allSlots[selectedDay] || [];
     const newSlotStart = timeToMinutes(startTime);
     const newSlotEnd = timeToMinutes(endTime);
+
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (!currentUser){
+      console.log("No current user :(");
+      return
+    }
+
+    const idToken = await currentUser.getIdToken();
 
     // Basic validation
     if (newSlotStart >= newSlotEnd) {
@@ -241,14 +340,23 @@ const SetTimeSlotScreen = () => {
     const isOverlapping = existingSlots.some(slot => {
         const existingStart = timeToMinutes(slot.start);
         const existingEnd = timeToMinutes(slot.end);
+        console.log("slot->start", slot.start, "slot->end", slot.end);
         // Overlap condition: (StartA < EndB) and (EndA > StartB)
         return newSlotStart < existingEnd && newSlotEnd > existingStart;
     });
 
     if (isOverlapping) {
-        setError('This time slot overlaps with an existing one.');
-        return;
+      setError('This time slot overlaps with an existing one.');
+      return;
     }
+    const fullStartTime = convertToUtcDateTime(selectedDay, startTime);
+//     const fullEndTime = convertToUtcDateTime(selectedDay, endTime);
+    const finalDate = fullStartTime.toISOString().split('T')[0]
+
+//     if (!fullStartTime || !fullEndTime) {
+//         setError('Failed to generate full date/time for slot.');
+//         return;
+//     }
     
     // --- Backend Data Structure ---
     // The `newSlot` object contains all the info you need.
@@ -256,32 +364,111 @@ const SetTimeSlotScreen = () => {
     // - `type`: This will be either 'free' or 'busy'. Your backend can use this field to differentiate.
     // - `start`, `end`: Time objects.
     // - `tags`: An array of selected strings.
+    console.log("satrtime", startTime);
+    console.log("endtime", endTime);
     const newSlot = {
-        id: Date.now(), // Unique ID for deletion
-        type: slotType, // This tells the backend if it's a 'free' or 'busy' slot
+        id: Date.now(), 
+        type: slotType, 
         start: startTime,
         end: endTime,
         day: selectedDay,
         tags: selectedTags,
+        is_free: slotType
     };
 
-    console.log("new Slot: ", newSlot);
+    const response  = await axios.post('http://192.168.29.223:3000/api/users/slots', newSlot, {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+    });
+
+    if (!response.status === 201){
+      return
+    };
+
+    console.log("response-data", response.data);
+
+    await fetchAllExistingSlots();
     
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setAllSlots(prev => ({
-        ...prev,
-        [selectedDay]: [...existingSlots, newSlot]
-    }));
-    setSelectedTags([]);
-    setError(''); // Clear any previous error
   };
 
-  const handleDeleteSlot = (day, slotIdToDelete) => {
+  const fetchAllExistingSlots = async () => {
+    try {  
+      console.log("api triggered");
+      const user = FIREBASE_AUTH.currentUser;
+      if (!user) {
+        console.warn("User not authenticated.");
+        return;
+      }
+
+      // Always await the token — it's an async operation
+      const idToken = await user.getIdToken();
+
+      const response = await axios.get('http://192.168.29.223:3000/api/users/slots', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      // ❌ Incorrect: if (!response.status === 200)
+      // ✅ Correct: check with !== operator
+      if (response.status !== 200) {
+        console.log("Slot does not exist!");
+        return;
+      }
+
+      console.log("returnedSlot:", JSON.stringify(response.data, null, 2));
+
+      const slotsFromBackend = response.data.slots;
+      const formattedSlots = slotsFromBackend.reduce((acc, slot) => {
+      const day = slot.day;
+      if (!acc[day]) acc[day] = [];
+        acc[day].push(slot);
+        return acc;
+      }, {});
+
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setAllSlots(formattedSlots);
+      setSelectedTags([]);
+      setError('');
+
+
+      console.log("slotforday", slotsForDay);
+    } catch (error) {
+      console.error("Error fetching slots:", error?.response?.data || error.message);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = FIREBASE_AUTH.onAuthStateChanged((user) => {
+      if (user) {
+        fetchAllExistingSlots();
+      } else {
+        console.log("No user signed in yet.");
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+
+
+
+  const handleDeleteSlot = async (day, slotIdToDelete, slot) => {
+      const user = FIREBASE_AUTH.currentUser;
+      const idToken = await user.getIdToken();
+      console.log("going to be deleted: ", slot);
+      const response = await axios.delete(`http://192.168.29.223:3000/api/users/slots/${slot.id}`,{
+        headers:{
+          Authorization: `Bearer ${idToken}`
+        }
+      });
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setAllSlots(prev => ({
           ...prev,
           [day]: prev[day].filter(slot => slot.id !== slotIdToDelete)
       }));
+
   };
 
   const slotsForDay = allSlots[selectedDay] || [];
@@ -376,8 +563,8 @@ const SetTimeSlotScreen = () => {
               <AddedSlot
                 key={slot.id}
                 slot={slot}
-                theme={THEME[slot.type]}
-                onDelete={() => handleDeleteSlot(selectedDay, slot.id)}
+                theme={THEME[slot.type] || THEME[slot.is_free] || THEME['free']}
+                onDelete={() => handleDeleteSlot(selectedDay, slot.id, slot)}
               />
             ))
           ) : (

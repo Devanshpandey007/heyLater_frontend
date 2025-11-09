@@ -88,23 +88,32 @@ const MainScreen = () => {
   );
 
   const renderUserItem = ({ item }) => (
-    <View style={styles.userCard}>
-      <View style={styles.userInfo}>
-        <Image source={{ uri: item.avatar }} style={styles.userAvatar} />
-        <Text style={styles.userName}>{item.name}</Text>
-      </View>
-      <View style={[
-        styles.statusBadge,
-        item.status === 'Available' ? styles.badgeAvailable : styles.badgeNotAvailable
-      ]}>
-        <Text style={[
-          styles.badgeText,
-          item.status === 'Available' ? styles.badgeTextAvailable : styles.badgeTextNotAvailable
+    <TouchableOpacity
+    onPress={()=> navigation.navigate('OthersProfile', {
+      userId : item.id,
+      userPic : item.picture,
+      userName : item.name,
+    })
+  }
+    >
+      <View style={styles.userCard}>
+        <View style={styles.userInfo}>
+          <Image source={{ uri: item.avatar }} style={styles.userAvatar} />
+          <Text style={styles.userName}>{item.name}</Text>
+        </View>
+        <View style={[
+          styles.statusBadge,
+          item.status === 'Available' ? styles.badgeAvailable : styles.badgeNotAvailable
         ]}>
-          {item.status === 'Available' ? 'Free' : 'Busy'}
-        </Text>
+          <Text style={[
+            styles.badgeText,
+            item.status === 'Available' ? styles.badgeTextAvailable : styles.badgeTextNotAvailable
+          ]}>
+            {item.status === 'Available' ? 'Free' : 'Busy'}
+          </Text>
+        </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
