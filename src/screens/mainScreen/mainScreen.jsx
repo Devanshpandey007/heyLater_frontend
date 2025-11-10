@@ -22,39 +22,49 @@ const MainScreen = () => {
   const [admin, setAdmin] = useState({});
   const [connectedUsers, setConnectedUsers] = useState([]);
 
-  const fetchConnectedUsers = useCallback(async () => {
-    try {
-      const currentUser = FIREBASE_AUTH.currentUser;
-      if (!currentUser) {
-        console.log('No user is signed in.');
-        return;
-      }
-      const idToken = await currentUser.getIdToken();
-      const response = await axios.get('http://192.168.29.223:3000/api/users/connected-users', {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      });
 
-      if (response.status === 200 && response.data.data) {
-        const usersList = response.data.data.map(invite => {
-          const otherUser = invite.inviterId === admin.id ? invite.invitee : invite.inviter;
-          return {
-            id: otherUser.id,
-            name: otherUser.name,
-            status: otherUser.is_available ? "Available" : "Not Available",
-            avatar: otherUser.picture || USER_AVATARS[Math.floor(Math.random() * USER_AVATARS.length)],
-          };
-        });
-        setConnectedUsers(usersList);
-        console.log("Connected Users fetched and processed successfully.");
-      } else {
-        console.log("Failed to fetch connected users:", response.status);
-      }
-    } catch (err) {
-      console.error("Error fetching connected users:", err);
-    }
-  }, []);
+  const fetchConnectedUsers = useCallback(async () => {
+    try {
+      const currentUser = FIREBASE_AUTH.currentUser;
+      // Get the ID reliably
+      const currentUserId = admin.id; 
+      
+      if (!currentUser || !currentUserId) { 
+        console.log('Current user or admin ID not ready.');
+        return;
+      }
+      
+      const idToken = await currentUser.getIdToken();
+      const response = await axios.get('http://192.168.29.223:3000/api/users/connected-users', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (response.status === 200 && response.data.data) {
+        const usersList = response.data.data.map(invite => {
+          const isInviter = invite.inviterId.toString() === currentUserId.toString();
+          const otherUser = isInviter ? invite.invitee : invite.inviter;
+          
+          console.log("other Users", otherUser);
+          return {
+            id: otherUser.id,
+            name: otherUser.name,
+            status: otherUser.is_available ? "Available" : "Not Available",
+            avatar: otherUser.picture || USER_AVATARS[Math.floor(Math.random() * USER_AVATARS.length)],
+          };
+        });
+        setConnectedUsers(usersList);
+        console.log("Connected Users fetched and processed successfully.");
+      } else {
+        console.log("Failed to fetch connected users:", response.status);
+      }
+    } catch (err) {
+      console.error("Error fetching connected users:", err);
+    }
+
+
+  }, [admin.id]);
 
   const getAdminProfile = useCallback(async () => {
     try {
@@ -83,36 +93,47 @@ const MainScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
-      fetchConnectedUsers();
-    }, [fetchConnectedUsers])
+      if (admin.id) {
+        fetchConnectedUsers();
+      }
+      // fetchConnectedUsers();
+    }, [admin.id, fetchConnectedUsers])
   );
+
 
   const renderUserItem = ({ item }) => (
     <TouchableOpacity
-    onPress={()=> navigation.navigate('OthersProfile', {
-      userId : item.id,
-      userPic : item.picture,
-      userName : item.name,
-    })
-  }
+        onPress={() => {
+            console.log('Navigating to OthersProfile with:', {
+                userId: item.id,
+                userPic: item.avatar,
+                userName: item.name,
+            });
+
+            navigation.navigate('OthersProfile', {
+                userId: item.id,
+                userPic: item.avatar,
+                userName: item.name,
+            });
+        }}
     >
-      <View style={styles.userCard}>
-        <View style={styles.userInfo}>
-          <Image source={{ uri: item.avatar }} style={styles.userAvatar} />
-          <Text style={styles.userName}>{item.name}</Text>
+        <View style={styles.userCard}>
+            <View style={styles.userInfo}>
+                <Image source={{ uri: item.avatar }} style={styles.userAvatar} />
+                <Text style={styles.userName}>{item.name}</Text>
+            </View>
+            <View style={[
+                styles.statusBadge,
+                item.status === 'Available' ? styles.badgeAvailable : styles.badgeNotAvailable
+            ]}>
+                <Text style={[
+                    styles.badgeText,
+                    item.status === 'Available' ? styles.badgeTextAvailable : styles.badgeTextNotAvailable
+                ]}>
+                    {item.status === 'Available' ? 'Free' : 'Busy'}
+                </Text>
+            </View>
         </View>
-        <View style={[
-          styles.statusBadge,
-          item.status === 'Available' ? styles.badgeAvailable : styles.badgeNotAvailable
-        ]}>
-          <Text style={[
-            styles.badgeText,
-            item.status === 'Available' ? styles.badgeTextAvailable : styles.badgeTextNotAvailable
-          ]}>
-            {item.status === 'Available' ? 'Free' : 'Busy'}
-          </Text>
-        </View>
-      </View>
     </TouchableOpacity>
   );
 
